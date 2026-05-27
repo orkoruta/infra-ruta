@@ -1,0 +1,11 @@
+{
+  "github_org": "orkoruta",
+  "base_dir": "~/projects/ruta",
+  "repos": [
+    {"name": "backend-ruta",          "target": "backend-ruta"},
+    {"name": "frontend-ruta",         "target": "frontend-ruta"},
+    {"name": "packages-ruta", "target": "packages-ruta"},
+    {"name": "docs-ruta",     "target": "docs-ruta"},
+    {"name": "infra-ruta",    "target": "infra-ruta"}
+  ]
+}

@@ -1,0 +1,140 @@
+# render.yaml.example
+#
+# Referencia para configurar los servicios de RUTA en Render.
+# Crear cada servicio manualmente en el dashboard de Render o copiar
+# este archivo a render.yaml en cada repo y ajustar los valores.
+#
+# Variables de entorno marcadas con `<SECRETO>` deben setearse en
+# Render Dashboard → Environment (nunca en este archivo).
+#
+# Organización GitHub: orkoruta
+# Docs: https://render.com/docs/yaml-spec
+
+services:
+  # ─────────────────────────────────────────────
+  # Backend API (Express)
+  # Repo: ruta-backend  |  Build path: api/
+  # ─────────────────────────────────────────────
+  - type: web
+    name: ruta-api
+    runtime: node
+    repo: https://github.com/orkoruta/ruta-backend
+    rootDir: .
+    buildCommand: |
+      npm install -g pnpm
+      pnpm install --frozen-lockfile
+      pnpm --filter @ruta/api build
+    startCommand: pnpm --filter @ruta/api start
+    healthCheckPath: /healthz
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DATABASE_URL
+        sync: false   # <SECRETO> — Render env group o variable manual
+      - key: JWT_SECRET
+        sync: false   # <SECRETO>
+      - key: JWT_ACCESS_TOKEN_LIFETIME_MINUTES
+        value: "15"
+      - key: JWT_REFRESH_TOKEN_LIFETIME_DAYS
+        value: "7"
+      - key: SUPABASE_URL
+        sync: false   # <SECRETO>
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false   # <SECRETO>
+      - key: WOMPI_PUBLIC_KEY
+        sync: false   # <SECRETO>
+      - key: WOMPI_PRIVATE_KEY
+        sync: false   # <SECRETO>
+      - key: WOMPI_WEBHOOK_SECRET
+        sync: false   # <SECRETO>
+      - key: NPM_TOKEN
+        sync: false   # <SECRETO> — PAT con read:packages para @orkoruta/*
+
+  # ─────────────────────────────────────────────
+  # Background Worker — pg-boss jobs
+  # Mismo repo/build que ruta-api; diferente start command.
+  # ─────────────────────────────────────────────
+  - type: worker
+    name: ruta-api-worker
+    runtime: node
+    repo: https://github.com/orkoruta/ruta-backend
+    rootDir: .
+    buildCommand: |
+      npm install -g pnpm
+      pnpm install --frozen-lockfile
+      pnpm --filter @ruta/api build
+    startCommand: pnpm --filter @ruta/api start:worker
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # <SECRETO>
+      - key: NPM_TOKEN
+        sync: false   # <SECRETO>
+      # (mismas variables que ruta-api; simplificar con Render env group)
+
+  # ─────────────────────────────────────────────
+  # Admin Panel (Next.js)
+  # Repo: ruta-frontend  |  App: admin/
+  # URL dev: https://app-dev.onrender.com
+  # ─────────────────────────────────────────────
+  - type: web
+    name: ruta-admin
+    runtime: node
+    repo: https://github.com/orkoruta/ruta-frontend
+    rootDir: .
+    buildCommand: |
+      npm install -g pnpm
+      pnpm install --frozen-lockfile
+      pnpm --filter @ruta/admin build
+    startCommand: pnpm --filter @ruta/admin start
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api-dev.onrender.com
+      - key: NPM_TOKEN
+        sync: false   # <SECRETO>
+
+  # ─────────────────────────────────────────────
+  # Storefront nativo (Next.js)
+  # Repo: ruta-frontend  |  App: storefront/
+  # URL dev: https://tienda-dev.onrender.com
+  # ─────────────────────────────────────────────
+  - type: web
+    name: ruta-storefront
+    runtime: node
+    repo: https://github.com/orkoruta/ruta-frontend
+    rootDir: .
+    buildCommand: |
+      npm install -g pnpm
+      pnpm install --frozen-lockfile
+      pnpm --filter @ruta/storefront build
+    startCommand: pnpm --filter @ruta/storefront start
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api-dev.onrender.com
+      - key: NPM_TOKEN
+        sync: false   # <SECRETO>
+
+# ─────────────────────────────────────────────
+# Dominios provisionales (configurar en Render Dashboard)
+# ─────────────────────────────────────────────
+# ruta-api       → api-dev.onrender.com
+# ruta-admin     → app-dev.onrender.com
+# ruta-storefront→ tienda-dev.onrender.com
+#
+# Producción (Sprint 6):
+# ruta-api       → api.ruta.com
+# ruta-admin     → app.ruta.com
+# ruta-storefront→ tienda.ruta.com
