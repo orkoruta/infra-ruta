@@ -66,18 +66,20 @@ fi
 DEV_PASSWORD="Dev.Ruta.2026!"
 echo "Generando hash argon2id para contraseña dev..."
 
-TMP_SCRIPT=$(mktemp --suffix=.mjs)
+TMP_SCRIPT=$(mktemp --suffix=.cjs)
 trap 'rm -f "$TMP_SCRIPT"' EXIT
 
-printf 'import argon2 from "%s/argon2.js";\n' "$ARGON2_PATH" > "$TMP_SCRIPT"
-cat >> "$TMP_SCRIPT" <<'NODE_EOF'
-const hash = await argon2.hash(process.env._RUTA_PW, {
-  type: argon2.argon2id,
-  memoryCost: 65536,
-  timeCost: 3,
-  parallelism: 4,
-});
-process.stdout.write(hash);
+cat > "$TMP_SCRIPT" <<NODE_EOF
+const argon2 = require('${ARGON2_PATH}/argon2.cjs');
+(async () => {
+  const hash = await argon2.hash(process.env._RUTA_PW, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 4,
+  });
+  process.stdout.write(hash);
+})();
 NODE_EOF
 
 export _RUTA_PW="$DEV_PASSWORD"
