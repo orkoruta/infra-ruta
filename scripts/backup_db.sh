@@ -1,79 +1,108 @@
 #!/usr/bin/env bash
 # backup_db.sh
 #
-# Genera un backup del schema 'ruta' en PostgreSQL usando pg_dump --format=custom.
-# Opcionalmente sube el archivo a S3 o OCI Object Storage si $BACKUP_BUCKET está definido.
+# Genera un backup comprimido del schema 'ruta' en PostgreSQL usando pg_dump | gzip.
+# El archivo resultante tiene el formato ruta_backup_YYYYMMDD_HHMMSS.sql.gz.
 #
 # Variables de entorno:
-#   DB_HOST        Host de la BD          (default: 149.130.168.24)
-#   DB_PORT        Puerto de la BD        (default: 26432)
-#   DB_NAME        Nombre de la BD        (default: rutadb)
-#   DB_USER        Usuario de la BD       (default: ruta)
-#   PGPASSWORD     Password de la BD      (REQUERIDO)
-#   BACKUP_DIR     Directorio de salida   (default: directorio actual)
-#   BACKUP_BUCKET  Bucket destino S3/OCI  (opcional; sube si está definido)
+#   DB_HOST            Host de la BD                 (requerido; sin default en prod)
+#   DB_PORT            Puerto de la BD               (requerido; sin default en prod)
+#   DB_NAME            Nombre de la BD               (requerido; sin default en prod)
+#   DB_USER            Usuario de la BD              (requerido; sin default en prod)
+#   DB_PASSWORD        Password de la BD             (requerido)
+#   BACKUP_DIR         Directorio de salida          (default: ./backups)
+#   BACKUP_KEEP_DAYS   Días de retención de backups  (default: 7)
 #
 # Uso: bash scripts/backup_db.sh
-# Ejemplo con password: PGPASSWORD=secret bash scripts/backup_db.sh
+# Ejemplo local (dev):
+#   DB_HOST=149.130.168.24 DB_PORT=26432 DB_NAME=rutadb DB_USER=rutauser \
+#   DB_PASSWORD=secret bash scripts/backup_db.sh
 
 set -euo pipefail
 
 # ─────────────────────────────────────────────
-# Variables con defaults
+# Variables de entorno (sin defaults hardcodeados en prod)
 # ─────────────────────────────────────────────
-DB_HOST="${DB_HOST:-149.130.168.24}"
-DB_PORT="${DB_PORT:-26432}"
-DB_NAME="${DB_NAME:-rutadb}"
-DB_USER="${DB_USER:-ruta}"
-BACKUP_DIR="${BACKUP_DIR:-.}"
+DB_HOST="${DB_HOST:?'ERROR: DB_HOST es requerido'}"
+DB_PORT="${DB_PORT:?'ERROR: DB_PORT es requerido'}"
+DB_NAME="${DB_NAME:?'ERROR: DB_NAME es requerido'}"
+DB_USER="${DB_USER:?'ERROR: DB_USER es requerido'}"
+DB_PASSWORD="${DB_PASSWORD:?'ERROR: DB_PASSWORD es requerido'}"
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-7}"
 
-# ─────────────────────────────────────────────
-# Verificar password requerido
-# ─────────────────────────────────────────────
-if [[ -z "${PGPASSWORD:-}" ]]; then
-  echo "ERROR: La variable PGPASSWORD es requerida." >&2
-  echo "Uso: PGPASSWORD=<password> bash scripts/backup_db.sh" >&2
-  exit 1
-fi
-
-export PGPASSWORD
+export PGPASSWORD="$DB_PASSWORD"
 
 # ─────────────────────────────────────────────
 # Verificar dependencias
 # ─────────────────────────────────────────────
-if ! command -v pg_dump &>/dev/null; then
-  echo "ERROR: 'pg_dump' es requerido pero no está instalado." >&2
-  echo "Instálalo con: sudo apt install postgresql-client" >&2
-  exit 1
+for cmd in pg_dump gzip; do
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "[ERROR] '$cmd' es requerido pero no está instalado." >&2
+    echo "        Instálalo con: sudo apt install postgresql-client gzip" >&2
+    exit 1
+  fi
+done
+
+# ─────────────────────────────────────────────
+# Verificar compatibilidad de versión pg_dump vs servidor
+# pg_dump debe ser >= versión del servidor para hacer el dump correctamente.
+# Si hay mismatch, abortar para evitar dumps corruptos o incompletos.
+# Para forzar ejecución (bajo su propio riesgo), exportar PGDUMP_SKIP_VERSION_CHECK=1
+# ─────────────────────────────────────────────
+if [[ "${PGDUMP_SKIP_VERSION_CHECK:-0}" != "1" ]]; then
+  LOCAL_VERSION=$(pg_dump --version | grep -oP '\d+' | head -1)
+  SERVER_VERSION=$(PGPASSWORD="$DB_PASSWORD" psql \
+    -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+    -t -A -c "SHOW server_version_num;" 2>/dev/null || echo "0")
+  SERVER_MAJOR=$(( SERVER_VERSION / 10000 ))
+
+  if [[ "$LOCAL_VERSION" -lt "$SERVER_MAJOR" ]]; then
+    echo "[ERROR] Incompatibilidad de versión:" >&2
+    echo "        pg_dump local: ${LOCAL_VERSION}.x" >&2
+    echo "        Servidor PostgreSQL: ${SERVER_MAJOR}.x" >&2
+    echo "" >&2
+    echo "        Instala postgresql-client-${SERVER_MAJOR} para hacer backups." >&2
+    echo "        Ver: https://www.postgresql.org/download/linux/ubuntu/" >&2
+    echo "" >&2
+    echo "        Para saltarte esta verificación (bajo tu propio riesgo):" >&2
+    echo "        PGDUMP_SKIP_VERSION_CHECK=1 bash scripts/backup_db.sh" >&2
+    exit 1
+  fi
 fi
+
+# ─────────────────────────────────────────────
+# Crear directorio de backup si no existe
+# ─────────────────────────────────────────────
+mkdir -p "$BACKUP_DIR"
 
 # ─────────────────────────────────────────────
 # Generar nombre del archivo de backup
 # ─────────────────────────────────────────────
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_FILE="${BACKUP_DIR}/ruta_backup_${TIMESTAMP}.dump"
+BACKUP_FILE="${BACKUP_DIR}/ruta_backup_${TIMESTAMP}.sql.gz"
 
-echo "=== Backup BD RUTA ==="
+echo "[INFO]  === Backup BD RUTA ==="
+echo "[INFO]  Inicio   : $(date '+%Y-%m-%d %H:%M:%S')"
+echo "[INFO]  Host     : ${DB_HOST}:${DB_PORT}"
+echo "[INFO]  BD       : ${DB_NAME}  (schema: ruta)"
+echo "[INFO]  Archivo  : ${BACKUP_FILE}"
+echo "[INFO]  Retención: ${BACKUP_KEEP_DAYS} días"
 echo ""
-echo "Host    : $DB_HOST:$DB_PORT"
-echo "BD      : $DB_NAME  (schema: ruta)"
-echo "Archivo : $BACKUP_FILE"
-echo ""
-echo "Ejecutando pg_dump..."
+echo "[INFO]  Ejecutando pg_dump | gzip ..."
 
 # ─────────────────────────────────────────────
-# Ejecutar pg_dump
+# Ejecutar pg_dump y comprimir con gzip
 # ─────────────────────────────────────────────
 if ! pg_dump \
-  --format=custom \
   --schema=ruta \
   -h "$DB_HOST" \
   -p "$DB_PORT" \
   -U "$DB_USER" \
   "$DB_NAME" \
-  -f "$BACKUP_FILE"; then
+  | gzip > "$BACKUP_FILE"; then
   echo "" >&2
-  echo "ERROR: pg_dump falló. Revisa la conexión y las credenciales." >&2
+  echo "[ERROR] pg_dump falló. Revisa la conexión y las credenciales." >&2
   rm -f "$BACKUP_FILE"
   exit 1
 fi
@@ -82,62 +111,29 @@ fi
 # Reportar tamaño del archivo
 # ─────────────────────────────────────────────
 FILE_SIZE="$(du -sh "$BACKUP_FILE" | cut -f1)"
+echo "[OK]    Backup completado exitosamente."
+echo "[INFO]  Archivo : ${BACKUP_FILE}"
+echo "[INFO]  Tamaño  : ${FILE_SIZE}"
+
+# ─────────────────────────────────────────────
+# Retención: eliminar backups más viejos que BACKUP_KEEP_DAYS días
+# ─────────────────────────────────────────────
 echo ""
-echo "✓ Backup completado exitosamente."
-echo "  Archivo : $BACKUP_FILE"
-echo "  Tamaño  : $FILE_SIZE"
+echo "[INFO]  Aplicando política de retención (${BACKUP_KEEP_DAYS} días) en ${BACKUP_DIR} ..."
 
-# ─────────────────────────────────────────────
-# Upload opcional a bucket (S3 o OCI)
-# Requiere el CLI instalado y configurado:
-#   - AWS CLI: https://docs.aws.amazon.com/cli/
-#   - OCI CLI: https://docs.oracle.com/iaas/Content/API/SDKDocs/cliinstall.htm
-# ─────────────────────────────────────────────
-if [[ -n "${BACKUP_BUCKET:-}" ]]; then
-  echo ""
-  echo "BACKUP_BUCKET definido: $BACKUP_BUCKET"
+DELETED=0
+while IFS= read -r old_file; do
+  echo "[INFO]  Eliminando backup expirado: ${old_file}"
+  rm -f "$old_file"
+  DELETED=$((DELETED + 1))
+done < <(find "$BACKUP_DIR" -maxdepth 1 -name 'ruta_backup_*.sql.gz' -mtime +"$BACKUP_KEEP_DAYS" 2>/dev/null || true)
 
-  UPLOAD_SUCCESS=false
-
-  # Intentar con AWS CLI primero
-  if command -v aws &>/dev/null; then
-    echo "Subiendo con AWS CLI a s3://$BACKUP_BUCKET/ ..."
-    if aws s3 cp "$BACKUP_FILE" "s3://${BACKUP_BUCKET}/$(basename "$BACKUP_FILE")"; then
-      echo "✓ Upload a S3 completado."
-      UPLOAD_SUCCESS=true
-    else
-      echo "AVISO: aws s3 cp falló. Intentando con OCI CLI..." >&2
-    fi
-  fi
-
-  # Intentar con OCI CLI si AWS no funcionó o no está disponible
-  if [[ "$UPLOAD_SUCCESS" == "false" ]]; then
-    if command -v oci &>/dev/null; then
-      echo "Subiendo con OCI CLI al bucket $BACKUP_BUCKET ..."
-      # Requiere: OCI_NAMESPACE, OCI_BUCKET_NAME o usar BACKUP_BUCKET como nombre del bucket.
-      # Asume que BACKUP_BUCKET es el nombre del bucket en OCI Object Storage.
-      if oci os object put \
-        --bucket-name "$BACKUP_BUCKET" \
-        --file "$BACKUP_FILE" \
-        --name "$(basename "$BACKUP_FILE")" \
-        --force; then
-        echo "✓ Upload a OCI Object Storage completado."
-        UPLOAD_SUCCESS=true
-      else
-        echo "ERROR: oci os object put falló." >&2
-      fi
-    fi
-  fi
-
-  if [[ "$UPLOAD_SUCCESS" == "false" ]]; then
-    echo "" >&2
-    echo "AVISO: No se pudo subir el backup al bucket." >&2
-    echo "  Verifica que aws CLI o oci CLI estén instalados y configurados." >&2
-    echo "  El archivo local se conserva en: $BACKUP_FILE" >&2
-    # No salir con error — el backup local fue exitoso
-  fi
+if [[ "$DELETED" -eq 0 ]]; then
+  echo "[INFO]  Sin backups expirados para eliminar."
+else
+  echo "[INFO]  ${DELETED} backup(s) expirado(s) eliminado(s)."
 fi
 
 echo ""
-echo "Listo."
+echo "[OK]    Proceso finalizado: $(date '+%Y-%m-%d %H:%M:%S')"
 exit 0
