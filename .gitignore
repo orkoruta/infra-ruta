@@ -9,3 +9,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Backups de BD (nunca commitear dumps de BD)
+backups/
+*.sql.gz
+*.dump
