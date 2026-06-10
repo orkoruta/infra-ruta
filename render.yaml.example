@@ -43,6 +43,8 @@ services:
         sync: false
       - key: NPM_TOKEN
         sync: false
+      - key: RUN_MAINTENANCE_JOBS
+        value: "false"
 
   - type: worker
     name: ruta-api-worker
@@ -64,6 +66,8 @@ services:
         sync: false
       - key: NPM_TOKEN
         sync: false
+      - key: RUN_MAINTENANCE_JOBS
+        value: "true"
 
   - type: web
     name: ruta-admin
@@ -75,6 +79,28 @@ services:
       /tmp/pnpm-bin/node_modules/.bin/pnpm install --frozen-lockfile &&
       /tmp/pnpm-bin/node_modules/.bin/pnpm --filter @ruta/admin build
     staticPublishPath: ./admin/out
+    routes:
+      - type: rewrite
+        source: /admin/buyers/*
+        destination: /admin/buyers/_.html
+      - type: rewrite
+        source: /admin/couriers/*
+        destination: /admin/couriers/_.html
+      - type: rewrite
+        source: /admin/orders/*
+        destination: /admin/orders/_.html
+      - type: rewrite
+        source: /admin/pickup-points/*
+        destination: /admin/pickup-points/_.html
+      - type: rewrite
+        source: /admin/products/*
+        destination: /admin/products/_.html
+      - type: rewrite
+        source: /courier/*
+        destination: /courier/_.html
+      - type: rewrite
+        source: /ruta-admin/clients/*
+        destination: /ruta-admin/clients/_.html
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://ruta-api.onrender.com
@@ -91,6 +117,34 @@ services:
       /tmp/pnpm-bin/node_modules/.bin/pnpm install --frozen-lockfile &&
       /tmp/pnpm-bin/node_modules/.bin/pnpm --filter @ruta/storefront build
     staticPublishPath: ./storefront/out
+    routes:
+      - type: rewrite
+        source: /c/*/checkout/confirmation
+        destination: /c/_/checkout/confirmation.html
+      - type: rewrite
+        source: /c/*/checkout
+        destination: /c/_/checkout.html
+      - type: rewrite
+        source: /c/*/cart
+        destination: /c/_/cart.html
+      - type: rewrite
+        source: /c/*/orders/*
+        destination: /c/_/orders/_.html
+      - type: rewrite
+        source: /c/*/orders
+        destination: /c/_/orders.html
+      - type: rewrite
+        source: /c/*/product/*
+        destination: /c/_/product/_.html
+      - type: rewrite
+        source: /c/*/login
+        destination: /c/_/login.html
+      - type: rewrite
+        source: /c/*/register
+        destination: /c/_/register.html
+      - type: rewrite
+        source: /c/*
+        destination: /c/_.html
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://ruta-api.onrender.com
