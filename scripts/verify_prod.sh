@@ -10,6 +10,12 @@
 
 set -euo pipefail
 
+# RLS forzada: la app conecta con el rol dueño de las tablas, así que sin este
+# contexto las políticas tenant_isolation dejarían este script sin ver ni
+# escribir filas. El rol ADMIN_RUTA es el que la política habilita para operar
+# de forma transversal.
+export PGOPTIONS="${PGOPTIONS:-} -c app.current_user_role=ADMIN_RUTA"
+
 if [[ -z "${PROD_DATABASE_URL:-}" ]]; then
   echo "ERROR: PROD_DATABASE_URL no está definida." >&2
   exit 1

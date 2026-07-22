@@ -9,6 +9,12 @@
 
 set -euo pipefail
 
+# RLS forzada: la app conecta con el rol dueño de las tablas, así que sin este
+# contexto las políticas tenant_isolation dejarían este script sin ver ni
+# escribir filas. El rol ADMIN_RUTA es el que la política habilita para operar
+# de forma transversal.
+export PGOPTIONS="${PGOPTIONS:-} -c app.current_user_role=ADMIN_RUTA"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKEND_DIR="$REPO_ROOT/backend-ruta"

@@ -20,6 +20,12 @@
 
 set -euo pipefail
 
+# RLS forzada: la app conecta con el rol dueño de las tablas, así que sin este
+# contexto las políticas tenant_isolation dejarían este script sin ver ni
+# escribir filas. El rol ADMIN_RUTA es el que la política habilita para operar
+# de forma transversal.
+export PGOPTIONS="${PGOPTIONS:-} -c row_security=on -c app.current_user_role=ADMIN_RUTA"
+
 # ─────────────────────────────────────────────
 # Variables de entorno (sin defaults hardcodeados en prod)
 # ─────────────────────────────────────────────
@@ -51,7 +57,7 @@ done
 # Para forzar ejecución (bajo su propio riesgo), exportar PGDUMP_SKIP_VERSION_CHECK=1
 # ─────────────────────────────────────────────
 if [[ "${PGDUMP_SKIP_VERSION_CHECK:-0}" != "1" ]]; then
-  LOCAL_VERSION=$(pg_dump --version | grep -oP '\d+' | head -1)
+  LOCAL_VERSION=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
   SERVER_VERSION=$(PGPASSWORD="$DB_PASSWORD" psql \
     -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
     -t -A -c "SHOW server_version_num;" 2>/dev/null || echo "0")
@@ -96,6 +102,7 @@ echo "[INFO]  Ejecutando pg_dump | gzip ..."
 # ─────────────────────────────────────────────
 if ! pg_dump \
   --schema=ruta \
+  --enable-row-security \
   -h "$DB_HOST" \
   -p "$DB_PORT" \
   -U "$DB_USER" \

@@ -17,6 +17,12 @@
 
 set -euo pipefail
 
+# RLS forzada: la app conecta con el rol dueño de las tablas, así que sin este
+# contexto las políticas tenant_isolation dejarían este script sin ver ni
+# escribir filas. El rol ADMIN_RUTA es el que la política habilita para operar
+# de forma transversal.
+export PGOPTIONS="${PGOPTIONS:-} -c app.current_user_role=ADMIN_RUTA"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DOCS_RUTA_DIR="${DOCS_RUTA_DIR:-"$(cd "$REPO_ROOT/../docs-ruta" && pwd)"}"
@@ -86,7 +92,7 @@ fi
 # ─── Verificar versión pg_dump vs servidor ────────────────────────────────────
 
 SERVER_MAJOR=$(psql "$PROD_DATABASE_URL" -t -A -c "SHOW server_version_num;" | cut -c1-2)
-CLIENT_MAJOR=$(psql --version | grep -oP '\d+' | head -1)
+CLIENT_MAJOR=$(psql --version | grep -oE '[0-9]+' | head -1)
 if [[ "$CLIENT_MAJOR" -lt "$SERVER_MAJOR" ]]; then
   log_warn "Cliente psql v${CLIENT_MAJOR} < servidor PostgreSQL v${SERVER_MAJOR}."
   log_warn "Se recomienda instalar postgresql-client-${SERVER_MAJOR} para compatibilidad total."

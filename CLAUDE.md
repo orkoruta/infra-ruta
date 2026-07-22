@@ -117,7 +117,7 @@ entre Clientes (negocios) y Compradores.
 | Auth | `jose` + `argon2` | `ruta-backend` |
 | Jobs | `pg-boss` | `ruta-backend` |
 | Pasarela | Wompi | externo |
-| Mapas | OSM + Leaflet | frontends |
+| Mapas | Google Maps (JS API + Geocoding) | frontends + `ruta-backend` |
 | Hosting | Render | externo |
 | Esquema BD | Estado-based SQL (`ruta_postgres.sql`) | `ruta-docs/bd/` |
 | Tests | Vitest + Supertest + Playwright + MSW | en cada repo |
@@ -378,7 +378,7 @@ Cuando dudes:
 - **Auth**: JWT jose+argon2, refresh tokens, cookies HttpOnly, 5 roles.
 - **Catálogo**: productos, categorías, importación Excel.
 - **Pedidos**: state machine completo (20+ estados), validación, aceptación.
-- **Flujo SHIP**: asignación courier (mapa Leaflet+OSM), entrega, cobro COD,
+- **Flujo SHIP**: asignación courier (mapa Google Maps), entrega, cobro COD,
   cancelación post-despacho, return-to-origin, auto-confirmación.
 - **Flujo PICKUP**: puntos físicos, verify identity, cobro, entrega.
 - **Pagos**: Wompi (online), contra entrega (COD), webhook HMAC.
