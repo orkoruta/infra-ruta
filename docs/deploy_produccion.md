@@ -67,7 +67,29 @@ El script aplica `docs-ruta/bd/ruta_postgres.sql` que incluye:
 bash scripts/verify_prod.sh
 ```
 
-Todos los checks deben mostrar `✓` antes de continuar.
+Todos los checks deben mostrar `✓` antes de continuar. **El script sale con
+código de error si detecta un problema de aislamiento multi-tenant**, así que no
+basta con mirar por encima: si termina en error, no sigas.
+
+### Si acusa RLS sin forzar
+
+`rutauser` es el dueño de las tablas y PostgreSQL **exime al dueño de RLS** salvo
+que se declare `FORCE`. Con `ENABLE` a secas las políticas quedan inertes y un
+Cliente puede leer datos de otro. Ya ocurrió una fuga real por esto en
+desarrollo (2026-07-22).
+
+```bash
+bash scripts/fix_force_rls.sh            # muestra qué corregiría
+bash scripts/fix_force_rls.sh --apply    # lo aplica, en una transacción
+bash scripts/verify_prod.sh              # confirmar que quedó en verde
+```
+
+Deben quedar **21 tablas** con RLS activo y forzado. Siete quedan fuera a
+propósito (`clients`, `sessions`, `state_catalog`, `webhook_subscriptions`,
+`external_webhook_events` y las dos de Vista de Control).
+
+Después de forzar RLS, `pg_dump` necesita `PGOPTIONS` +
+`--enable-row-security`; los scripts de backup de este repo ya lo contemplan.
 
 ---
 

@@ -54,6 +54,38 @@ PARTS=$(psql "$PROD_DATABASE_URL" -t -A -c \
   && ok "Particiones p0 para client_id=0: $PARTS" \
   || warn "Particiones p0: $PARTS (esperadas ≥20)"
 
+# ── Aislamiento multi-tenant: RLS activo Y FORZADO ──────────────────────────
+#
+# La comprobación más importante de este script. `rutauser` es el dueño de las
+# tablas, y PostgreSQL **exime al dueño de RLS** salvo que se declare FORCE. Con
+# ENABLE a secas las políticas quedan inertes y un Cliente puede leer datos de
+# otro. Ya ocurrió una fuga real por esto en desarrollo (2026-07-22).
+#
+# Se comparan las tablas que deberían tenerlo contra las que lo tienen, en vez
+# de contar: un número redondo puede esconder que falta justo la de pedidos.
+RLS_MISSING=$(psql "$PROD_DATABASE_URL" -t -A -c \
+  "SELECT string_agg(c.relname, ', ' ORDER BY c.relname)
+   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'ruta'
+     AND c.relkind IN ('r','p')
+     AND c.relname !~ '_p[0-9]+$'
+     AND c.relrowsecurity          -- tiene RLS activo…
+     AND NOT c.relforcerowsecurity;-- …pero no forzado: inerte para el dueño")
+
+if [[ -z "$RLS_MISSING" ]]; then
+  RLS_FORCED=$(psql "$PROD_DATABASE_URL" -t -A -c \
+    "SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname='ruta' AND c.relkind IN ('r','p')
+       AND c.relname !~ '_p[0-9]+$' AND c.relforcerowsecurity;")
+  [[ "$RLS_FORCED" -ge 21 ]] \
+    && ok "RLS forzada en $RLS_FORCED tablas operativas" \
+    || warn "RLS forzada en solo $RLS_FORCED tablas (esperadas ≥21)"
+else
+  fail "FUGA CROSS-TENANT POSIBLE — RLS activa pero SIN forzar en: $RLS_MISSING"
+  echo -e "      Corrige con: bash scripts/fix_force_rls.sh"
+  RLS_LEAK=1
+fi
+
 # Cliente plataforma
 PLATFORM=$(psql "$PROD_DATABASE_URL" -t -A -c \
   "SELECT COUNT(*) FROM ruta.clients WHERE id=0;")
@@ -96,3 +128,10 @@ done
 
 echo ""
 echo -e "${BOLD}Listo.${RESET} Si hay advertencias, revísalas antes del go-live.\n"
+
+# Salir con error si el aislamiento multi-tenant está comprometido: así un CI o
+# un runbook se detiene aquí en vez de dar por buena la verificación.
+if [[ "${RLS_LEAK:-0}" == "1" ]]; then
+  echo -e "\n${RED}${BOLD}Verificación FALLIDA: revisa el aislamiento multi-tenant antes de seguir.${RESET}\n"
+  exit 1
+fi
