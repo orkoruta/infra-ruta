@@ -160,9 +160,14 @@ En tu proveedor de DNS, agrega tres registros CNAME:
 
 | Nombre | Tipo | Valor |
 |---|---|---|
-| `api` | CNAME | `ruta-api.onrender.com` |
+| `api` | CNAME | `ruta-orko-api.onrender.com` |
 | `app` | CNAME | `ruta-admin.onrender.com` |
-| `tienda` | CNAME | `ruta-storefront.onrender.com` |
+| `tienda` | CNAME | `ruta-by-orko.onrender.com` |
+
+> Los nombres de la API y del storefront no siguen el patrón `ruta-<servicio>`:
+> son `ruta-orko-api` y `ruta-by-orko`, como están creados en el panel de Render.
+> `ruta-api.onrender.com` y `ruta-storefront.onrender.com` no existen y responden
+> `x-render-routing: no-server`.
 
 Render detecta los dominios automáticamente y emite certificados TLS via Let's Encrypt.
 La propagación DNS puede tardar hasta 48 horas (normalmente menos de 1 hora).

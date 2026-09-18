@@ -1,148 +1,87 @@
-# render.yaml.example
+# render.yaml.example — referencia de la configuración de Render en RUTA
 #
-# Referencia actual para configurar los servicios base de RUTA en Render.
-# Los secretos deben configurarse en Render Dashboard o env groups.
-
-services:
-  - type: web
-    name: ruta-api
-    runtime: node
-    repo: https://github.com/orkoruta/backend-ruta
-    rootDir: .
-    buildCommand: >-
-      npm install pnpm@11.4.0 --no-save &&
-      node_modules/.bin/pnpm install --frozen-lockfile &&
-      node_modules/.bin/pnpm --filter @ruta/api build
-    startCommand: pnpm --filter @ruta/api start
-    healthCheckPath: /healthz
-    plan: starter
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: "3001"
-      - key: HOST
-        value: "0.0.0.0"
-      - key: DATABASE_URL
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: WOMPI_PUBLIC_KEY
-        sync: false
-      - key: WOMPI_PRIVATE_KEY
-        sync: false
-      - key: WOMPI_WEBHOOK_SECRET
-        sync: false
-      - key: CORS_ORIGINS
-        sync: false
-      - key: LOGTAIL_TOKEN
-        sync: false
-      - key: NPM_TOKEN
-        sync: false
-      - key: RUN_MAINTENANCE_JOBS
-        value: "false"
-
-  - type: worker
-    name: ruta-api-worker
-    runtime: node
-    repo: https://github.com/orkoruta/backend-ruta
-    rootDir: .
-    buildCommand: >-
-      npm install pnpm@11.4.0 --no-save &&
-      node_modules/.bin/pnpm install --frozen-lockfile &&
-      node_modules/.bin/pnpm --filter @ruta/api build
-    startCommand: pnpm --filter @ruta/api start:worker
-    plan: starter
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: NPM_TOKEN
-        sync: false
-      - key: RUN_MAINTENANCE_JOBS
-        value: "true"
-
-  - type: web
-    name: ruta-admin
-    runtime: static
-    repo: https://github.com/orkoruta/frontend-ruta
-    rootDir: .
-    buildCommand: >-
-      npm install pnpm@11.3.0 --prefix=/tmp/pnpm-bin --no-save &&
-      /tmp/pnpm-bin/node_modules/.bin/pnpm install --frozen-lockfile &&
-      /tmp/pnpm-bin/node_modules/.bin/pnpm --filter @ruta/admin build
-    staticPublishPath: ./admin/out
-    routes:
-      - type: rewrite
-        source: /admin/buyers/*
-        destination: /admin/buyers/_.html
-      - type: rewrite
-        source: /admin/couriers/*
-        destination: /admin/couriers/_.html
-      - type: rewrite
-        source: /admin/orders/*
-        destination: /admin/orders/_.html
-      - type: rewrite
-        source: /admin/pickup-points/*
-        destination: /admin/pickup-points/_.html
-      - type: rewrite
-        source: /admin/products/*
-        destination: /admin/products/_.html
-      - type: rewrite
-        source: /courier/*
-        destination: /courier/_.html
-      - type: rewrite
-        source: /ruta-admin/clients/*
-        destination: /ruta-admin/clients/_.html
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://ruta-api.onrender.com
-      - key: NPM_TOKEN
-        sync: false
-
-  - type: web
-    name: ruta-storefront
-    runtime: static
-    repo: https://github.com/orkoruta/frontend-ruta
-    rootDir: .
-    buildCommand: >-
-      npm install pnpm@11.3.0 --prefix=/tmp/pnpm-bin --no-save &&
-      /tmp/pnpm-bin/node_modules/.bin/pnpm install --frozen-lockfile &&
-      /tmp/pnpm-bin/node_modules/.bin/pnpm --filter @ruta/storefront build
-    staticPublishPath: ./storefront/out
-    routes:
-      - type: rewrite
-        source: /c/*/checkout/confirmation
-        destination: /c/_/checkout/confirmation.html
-      - type: rewrite
-        source: /c/*/checkout
-        destination: /c/_/checkout.html
-      - type: rewrite
-        source: /c/*/cart
-        destination: /c/_/cart.html
-      - type: rewrite
-        source: /c/*/orders/*
-        destination: /c/_/orders/_.html
-      - type: rewrite
-        source: /c/*/orders
-        destination: /c/_/orders.html
-      - type: rewrite
-        source: /c/*/product/*
-        destination: /c/_/product/_.html
-      - type: rewrite
-        source: /c/*/login
-        destination: /c/_/login.html
-      - type: rewrite
-        source: /c/*/register
-        destination: /c/_/register.html
-      - type: rewrite
-        source: /c/*
-        destination: /c/_.html
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://ruta-api.onrender.com
-      - key: NPM_TOKEN
-        sync: false
+# Este archivo **no se aplica**: los blueprints que Render lee son los que
+# viven en cada repo, y son la única fuente de verdad.
+#
+#   backend-ruta/render.yaml    → ruta-orko-api (web) + ruta-api-worker (worker)
+#   frontend-ruta/render.yaml   → ruta-admin (static) + ruta-by-orko (static)
+#
+# Los `name:` tienen que coincidir **exactamente** con los servicios que ya
+# existen en el panel: Render empareja por nombre, y un nombre nuevo no
+# actualiza el servicio, crea otro al lado. Los dos que no se adivinan son
+# `ruta-orko-api` (la API, no `ruta-api`) y `ruta-by-orko` (el storefront).
+#
+# Antes esta copia duplicaba los cuatro servicios enteros y se desincronizó:
+# tenía las reglas `routes` del storefront que al blueprint real le faltaban,
+# nombres de servicio que no existen y una variable muerta
+# (`RUN_MAINTENANCE_JOBS`, que no lee nadie en el código: tanto la API como el
+# worker arrancan los jobs de mantenimiento siempre). Para que no vuelva a
+# pasar, aquí solo quedan las convenciones compartidas.
+#
+# Ojo con la organización de GitHub: los repos locales tienen el remoto en
+# `msimonz/*`, pero Render está conectado a `orkoruta/*` (lo que manda es el
+# panel). Probablemente sean el mismo repo tras una transferencia, con GitHub
+# redirigiendo la URL vieja. En los blueprints va `orkoruta/*`.
+#
+# ---------------------------------------------------------------------------
+# Convenciones que comparten los cuatro servicios
+# ---------------------------------------------------------------------------
+#
+# 1. Clonado de `packages-ruta` en el buildCommand
+#
+#    `pnpm-workspace.yaml` de backend y frontend resuelve los paquetes internos
+#    con rutas fuera del repo:
+#
+#      '@orkoruta/shared': 'link:../packages-ruta/shared'
+#      '@orkoruta/db':     'link:../packages-ruta/db'
+#      zod:                'link:../packages-ruta/shared/node_modules/zod'  # solo backend
+#
+#    Render clona un único repositorio, así que el build tiene que traerse
+#    `packages-ruta` como hermano para que esos enlaces resuelvan:
+#
+#      rm -rf ../packages-ruta &&
+#      git clone --depth 1 "https://x-access-token:$PACKAGES_REPO_TOKEN@github.com/orkoruta/packages-ruta.git" ../packages-ruta &&
+#      pnpm --dir ../packages-ruta install --frozen-lockfile &&
+#      pnpm --dir ../packages-ruta build &&
+#      pnpm install --frozen-lockfile
+#
+#    El `install` en `packages-ruta` no es opcional ni siquiera para el
+#    frontend: el override de `zod` del backend apunta dentro de su
+#    `node_modules`. El `build` genera el cliente Prisma y los `dist/`.
+#
+#    La alternativa es volver a consumir los paquetes desde GitHub Packages
+#    (bump + publish en cada cambio de `shared`, quitar los overrides y
+#    regenerar los dos lockfiles). Se descartó para no perder el enlace local.
+#
+# 2. pnpm se instala en /tmp/pnpm-bin, nunca en ./node_modules
+#
+#    Al recrear `node_modules`, `pnpm install` borraba su propio binario a
+#    mitad de ejecución. Versión por repo, igual que su CI:
+#    backend `pnpm@11.4.0`, frontend `pnpm@11.3.0`.
+#
+# 3. Los frontends son export estático, activado por env
+#
+#    `next.config.mjs` pone `output: 'export'` solo si `NEXT_OUTPUT_EXPORT=1`,
+#    que el blueprint define. En local queda apagado. Sin esa variable no se
+#    genera `out/` y el `staticPublishPath` publica un build viejo.
+#
+# 4. Las rutas dinámicas necesitan reglas `routes` de rewrite
+#
+#    Cada `[id]`/`[slug]` se exporta una sola vez con el marcador `_`
+#    (`generateStaticParams([{ id: '_' }])`) y el rewrite manda el valor real a
+#    ese HTML. Render aplica la primera regla que casa: las rutas estáticas que
+#    caen bajo un comodín (`/admin/products/new`) van **antes** del comodín
+#    (`/admin/products/*`). Al añadir una pantalla con parámetro hay que añadir
+#    su regla en `frontend-ruta/render.yaml`.
+#
+# 5. Dos claves de Google Maps distintas, y no son intercambiables
+#
+#    `GOOGLE_MAPS_API_KEY` (backend, Geocoding, restringida por IP) y
+#    `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (navegador, restringida por referrer).
+#
+# 6. Secretos
+#
+#    Todo lo que va con `sync: false` se rellena en el panel de Render o en un
+#    env group; nada de valores reales en los blueprints. `PACKAGES_REPO_TOKEN`
+#    es un PAT con lectura del repo privado `orkoruta/packages-ruta`, y puede ser
+#    el mismo valor que `NPM_TOKEN` si ese token también tiene `read:packages`.
