@@ -57,6 +57,13 @@ for s in services():
     static = s.get("runtime") == "static"
     print(f"\n=== {name} ({sid})")
 
+    # Un servicio declarado que ya no existe en Render (hoy, el worker) se
+    # salta: antes el script seguía y llenaba la salida de 404.
+    status, _ = call("GET", f"/services/{sid}")
+    if status == 404:
+        print("  no existe en Render → se salta")
+        continue
+
     # 1. build / start command
     details = {"buildCommand": " ".join(s["buildCommand"].split())}
     if static:
